@@ -39,7 +39,21 @@ plugin.onPostGetFields = async function (hookData) {
 		postCount: hookData.posts ? hookData.posts.length : 0,
 	}, null, 2));
 
-	// Return the data unchanged (this is a filter hook, so we must return the data)
+	// Log all posts data
+	if (hookData.posts) {
+		console.log('[nodebb-plugin-post-fields-logger] Posts data:', JSON.stringify(hookData.posts, null, 2));
+	}
+	
+
+	
+	// Set uid field to 0 for all posts
+	// if (hookData.posts) {
+	// 	hookData.posts.forEach(post => {
+	// 		if (post) {
+	// 			post.uid = -1;//Set to -1 for anonymous mode, 0 for guest
+	// 		}
+	// 	});
+	// }
 	return hookData;
 };
 

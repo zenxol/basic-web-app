@@ -293,10 +293,17 @@ async function addTags(topicData, req, res, currentPage, postAtIndex) {
 	}
 
 	if (postAtIndex) {
-		res.locals.linkTags.push({
-			rel: 'author',
-			href: `${url}/user/${postAtIndex.user.userslug}`,
-		});
+		if (postAtIndex.uid == -1) {
+			res.locals.linkTags.push({
+				rel: 'author',
+				href: `${url}/user/anonymous`,
+			});
+		} else {
+			res.locals.linkTags.push({
+				rel: 'author',
+				href: `${url}/user/${postAtIndex.user.userslug}`,
+			});
+		}
 	}
 
 	if (meta.config.activitypubEnabled && postAtIndex) {

@@ -31,6 +31,22 @@ module.exports = function (User) {
 
 	let customFieldWhiteList = null;
 
+	User.anonymousData = {
+		uid: -1,
+		username: 'anonymous',
+		displayname: 'anonymous',
+		userslug: '',
+		fullname: 'anonymous',
+		email: '',
+		'icon:text': 'A',
+		'icon:bgColor': '#aaa',
+		groupTitle: '',
+		groupTitleArray: [],
+		status: 'offline',
+		reputation: 0,
+		'email:confirmed': 0,
+	};
+
 	User.guestData = {
 		uid: 0,
 		username: '[[global:guest]]',
@@ -146,13 +162,10 @@ module.exports = function (User) {
 	function uidsToUsers(uids, uniqueUids, usersData) {
 		const uidToUser = _.zipObject(uniqueUids, usersData);
 		const users = uids.map((uid) => {
-			const user = uidToUser[uid] || { ...User.guestData };
+			const user = uidToUser[uid] || (uid === -1 ? { ...User.anonymousData } : { ...User.guestData });
 			if (!parseInt(user.uid, 10) && !activitypub.helpers.isUri(user.uid)) {
 				user.username = (user.hasOwnProperty('oldUid') && parseInt(user.oldUid, 10)) ? '[[global:former-user]]' : '[[global:guest]]';
 				user.displayname = user.username;
-			}
-			if (uid === -1) { // if loading spider set uid to -1 otherwise spiders have uid = 0 like guests
-				user.uid = -1;
 			}
 			return user;
 		});
