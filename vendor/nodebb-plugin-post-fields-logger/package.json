@@ -1,0 +1,21 @@
+{
+  "name": "nodebb-plugin-post-fields-logger",
+  "version": "1.0.0",
+  "description": "A NodeBB plugin that enables anonymous posting mode, hiding user identity from regular users while preserving visibility for admins and moderators",
+  "main": "index.js",
+  "keywords": [
+    "nodebb",
+    "plugin",
+    "anonymous",
+    "posting",
+    "privacy",
+    "post",
+    "fields"
+  ],
+  "author": "NodeBB Developer",
+  "license": "MIT",
+  "nbbpm": {
+    "compatibility": "^4.0.0"
+  }
+}
+
