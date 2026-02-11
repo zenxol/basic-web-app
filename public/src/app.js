@@ -117,6 +117,11 @@ if (document.readyState === 'loading') {
 			search.init();
 			overrides.overrideTimeago();
 			hooks.fire('action:app.load');
+			hooks.on('filter:composer.submit', function (data, next) {
+				const isAnon = data.composerEl?.attr('data-anonymous-post') === '1';
+				data.composerData.isAnonymous = !!isAnon;
+				next(null, data);
+			});
 			$(window).on('action:composer.enhanced', function (ev, data) {
 				const container = data.postContainer;
 				const postData = data.postData || {};
@@ -128,7 +133,7 @@ if (document.readyState === 'loading') {
 				}
 				const uuid = container.attr('data-uuid') || 'new';
 				const id = 'composer-anonymous-post-' + uuid;
-				const row = $('<div class="composer-anonymous-wrap mb-2"><div class="form-check"><input class="form-check-input" type="checkbox" id="' + id + '" data-composer-anonymous /><label class="form-check-label" for="' + id + '">Post anonymously</label></div></div>');
+				const row = $('<div class="composer-anonymous-wrap mb-2"><div class="form-check"><input class="form-check-input" type="checkbox" id="' + id + '" data-composer-anonymous /><label class="form-check-label" for="' + id + '">Post Anonymously</label></div></div>');
 				container.find('.title-container').first().after(row);
 				container.find('[data-composer-anonymous]').on('change', function () {
 					container.attr('data-anonymous-post', $(this).prop('checked') ? '1' : '0');
