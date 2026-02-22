@@ -470,7 +470,8 @@ describe('API', async () => {
 						});
 					}
 
-					url = nconf.get('url') + (prefix || '') + testPath;
+					const base = nconf.get('url') + (prefix || '') + (nconf.get('relative_path') || '');
+					url = base + testPath;
 				});
 
 				it('should contain a valid request body (if present) with application/json or multipart/form-data type if POST/PUT/DELETE', () => {
