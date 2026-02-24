@@ -33,4 +33,12 @@ describe("QueryProcessor", () => {
             "aidenn"
           ));
     })
+
+    test('should return 17', () => {
+        const query = "What is 62 minus 45?";
+        const response: string = QueryProcessor(query);
+        expect(response).toBe((
+            "17"
+          ));
+    })
 });
