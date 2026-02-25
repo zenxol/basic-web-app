@@ -13,6 +13,8 @@ const privileges = require('./privileges');
 const activitypub = require('./activitypub');
 const utils = require('./utils');
 
+const fuzzy = require('./search/fuzzy');
+
 const search = module.exports;
 
 search.search = async function (data) {
@@ -209,6 +211,9 @@ async function searchInBookmarks(data, searchCids, searchUids) {
 				if (matchWords === 'contains') {
 					const needle = queryStr.toLowerCase();
 					return content.toLowerCase().includes(needle) || title.toLowerCase().includes(needle);
+				}
+				if (matchWords === 'fuzzy') {
+					return fuzzy.fuzzyMatches(queryStr, content) || fuzzy.fuzzyMatches(queryStr, title);
 				}
 				const tokens = queryStr.split(' ');
 				const method = (matchWords === 'any' ? 'some' : 'every');
