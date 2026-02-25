@@ -117,10 +117,10 @@ if (document.readyState === 'loading') {
 			search.init();
 			overrides.overrideTimeago();
 			hooks.fire('action:app.load');
-			hooks.on('filter:composer.submit', function (data, next) {
+			hooks.on('filter:composer.submit', function (data) {
 				const isAnon = data.composerEl?.attr('data-anonymous-post') === '1';
 				data.composerData.isAnonymous = !!isAnon;
-				next(null, data);
+				return data;
 			});
 			$(window).on('action:composer.enhanced', function (ev, data) {
 				const container = data.postContainer;
