@@ -605,23 +605,21 @@ describe('Post Fields Logger Plugin - Anonymous Mode', () => {
 			assert.strictEqual(result.posts[0].user.displayname, 'Anonymous');
 		});
 
-		it('should preserve Guest for real guest posts (not anonymous)', async () => {
-			// A real guest post (not marked as anonymous)
+		it('should not affect a regular (non-anonymous) logged-in post', async () => {
+			// A normal post by a logged-in student with isAnonymous not set
 			const hookData = {
 				posts: [{
 					pid: 1,
-					uid: 0,
-					// NOT marked as anonymous
-					user: { uid: 0, username: '[[global:guest]]' },
-					handle: 'Guest Poster',
+					uid: 100,
+					user: { uid: 100, username: 'student1', displayname: 'Student One' },
 				}],
-				uid: 0,
+				uid: 200, // Another logged-in student viewing
 			};
 			const result = await plugin.onTopicsAddPostData(hookData);
 
-			// Should remain as Guest
-			assert.strictEqual(result.posts[0].user.username, '[[global:guest]]');
-			assert.strictEqual(result.posts[0].handle, 'Guest Poster');
+			// Should remain unchanged - no masking on regular posts
+			assert.strictEqual(result.posts[0].user.username, 'student1');
+			assert.strictEqual(result.posts[0].uid, 100);
 		});
 
 		it('should show real identity to instructor viewing a student anonymous post', async () => {
