@@ -623,6 +623,231 @@ describe('Post Fields Logger Plugin - Anonymous Mode', () => {
 			assert.strictEqual(result.posts[0].user.username, '[[global:guest]]');
 			assert.strictEqual(result.posts[0].handle, 'Guest Poster');
 		});
+
+		it('should show real identity to instructor viewing a student anonymous post', async () => {
+			// Student (uid 100) posts anonymously. Instructor (uid 5) views.
+			// Stage 1: instructor is privileged, uid NOT masked
+			const stage1Data = {
+				pids: [1],
+				fields: [],
+				posts: [{
+					pid: 1,
+					uid: 100,
+					isAnonymous: true,
+					user: { uid: 100, username: 'student1', displayname: 'Student One' },
+				}],
+				caller: { uid: 5 }, // Instructor (admin uid 1-10)
+			};
+			const stage1Result = await plugin.onPostGetFields(stage1Data);
+
+			// Stage 1: uid preserved for privileged viewer
+			assert.strictEqual(stage1Result.posts[0].uid, 100);
+			assert.strictEqual(stage1Result.posts[0]._callerIsPrivileged, true);
+
+			// Stage 2: instructor still sees real identity
+			const stage2Data = { posts: stage1Result.posts, uid: 5 };
+			const result = await plugin.onTopicsAddPostData(stage2Data);
+
+			assert.strictEqual(result.posts[0].user.username, 'student1');
+			assert.strictEqual(result.posts[0].user.displayname, 'Student One');
+			assert.strictEqual(result.posts[0].uid, 100);
+		});
+
+		it('should hide identity from a student viewing another student\'s anonymous post', async () => {
+			// Student (uid 100) posts anonymously. Another student (uid 200) views.
+			// Stage 1: regular user, uid IS masked
+			const stage1Data = {
+				pids: [1],
+				fields: [],
+				posts: [{
+					pid: 1,
+					uid: 100,
+					isAnonymous: true,
+					user: { uid: 100, username: 'student1', displayname: 'Student One' },
+				}],
+				caller: { uid: 200 }, // Another student (uid > 20, not privileged)
+			};
+			const stage1Result = await plugin.onPostGetFields(stage1Data);
+
+			// Stage 1: uid masked for non-privileged viewer
+			assert.strictEqual(stage1Result.posts[0].uid, 0);
+			assert.strictEqual(stage1Result.posts[0]._originalUid, 100);
+
+			// Simulate NodeBB loading guest user data after uid was set to 0
+			stage1Result.posts[0].user = { uid: 0, username: '[[global:guest]]', displayname: '[[global:guest]]' };
+
+			// Stage 2: student sees "Anonymous"
+			const stage2Data = { posts: stage1Result.posts, uid: 200 };
+			const result = await plugin.onTopicsAddPostData(stage2Data);
+
+			assert.strictEqual(result.posts[0].user.username, 'Anonymous');
+			assert.strictEqual(result.posts[0].user.displayname, 'Anonymous');
+			assert.strictEqual(result.posts[0].handle, 'Anonymous');
+		});
+	});
+
+	describe('Edge cases', () => {
+		it('should treat isAnonymous stored as string "true" as anonymous (Redis storage)', async () => {
+			// Redis stores all values as strings; "true" is truthy in JS
+			const hookData = {
+				pids: [1],
+				fields: [],
+				posts: [{ pid: 1, uid: 123, isAnonymous: 'true' }],
+				caller: { uid: 0 },
+			};
+			const result = await plugin.onPostGetFields(hookData);
+
+			assert.strictEqual(result.posts[0].isAnonymousPost, true);
+			assert.strictEqual(result.posts[0].uid, 0);
+		});
+
+		it('should not mask posts where isAnonymous is false', async () => {
+			const hookData = {
+				pids: [1],
+				fields: [],
+				posts: [{ pid: 1, uid: 123, isAnonymous: false, user: { uid: 123, username: 'user1' } }],
+				caller: { uid: 0 },
+			};
+			const result = await plugin.onPostGetFields(hookData);
+
+			assert.strictEqual(result.posts[0].uid, 123);
+			assert.strictEqual(result.posts[0].isAnonymousPost, undefined);
+		});
+
+		it('should not mask posts where isAnonymous is 0', async () => {
+			const hookData = {
+				pids: [1],
+				fields: [],
+				posts: [{ pid: 1, uid: 123, isAnonymous: 0, user: { uid: 123, username: 'user1' } }],
+				caller: { uid: 0 },
+			};
+			const result = await plugin.onPostGetFields(hookData);
+
+			assert.strictEqual(result.posts[0].uid, 123);
+			assert.strictEqual(result.posts[0].isAnonymousPost, undefined);
+		});
+
+		it('should not overwrite _originalUid if already set on the post', async () => {
+			// Protects against double-processing
+			const hookData = {
+				pids: [1],
+				fields: [],
+				posts: [{
+					pid: 1,
+					uid: 0, // Already masked
+					_originalUid: 123, // Already stored
+					isAnonymous: true,
+				}],
+				caller: { uid: 0 },
+			};
+			const result = await plugin.onPostGetFields(hookData);
+
+			assert.strictEqual(result.posts[0]._originalUid, 123);
+		});
+
+		it('should not overwrite _originalUser if already set in stage 2', async () => {
+			const hookData = {
+				posts: [{
+					pid: 1,
+					uid: 0,
+					isAnonymousPost: true,
+					_callerIsPrivileged: false,
+					_originalUser: { uid: 123, username: 'alreadystored' },
+					user: { uid: 0, username: '[[global:guest]]' },
+				}],
+				uid: 0,
+			};
+			const result = await plugin.onTopicsAddPostData(hookData);
+
+			// _originalUser should not be overwritten
+			assert.strictEqual(result.posts[0]._originalUser.username, 'alreadystored');
+			// user should still be replaced with Anonymous
+			assert.strictEqual(result.posts[0].user.username, 'Anonymous');
+		});
+
+		it('should not overwrite _originalHandle if already set in stage 2', async () => {
+			const hookData = {
+				posts: [{
+					pid: 1,
+					uid: 0,
+					isAnonymousPost: true,
+					_callerIsPrivileged: false,
+					user: { uid: 0, username: '[[global:guest]]' },
+					handle: 'SomeHandle',
+					_originalHandle: 'OriginalHandle',
+				}],
+				uid: 0,
+			};
+			const result = await plugin.onTopicsAddPostData(hookData);
+
+			assert.strictEqual(result.posts[0]._originalHandle, 'OriginalHandle');
+			assert.strictEqual(result.posts[0].handle, 'Anonymous');
+		});
+
+		it('should not set handle to Anonymous when post has no handle', async () => {
+			const hookData = {
+				posts: [{
+					pid: 1,
+					uid: 0,
+					isAnonymousPost: true,
+					_callerIsPrivileged: false,
+					user: { uid: 0, username: '[[global:guest]]' },
+					// no handle field
+				}],
+				uid: 0,
+			};
+			const result = await plugin.onTopicsAddPostData(hookData);
+
+			assert.strictEqual(result.posts[0].handle, 'Anonymous');
+		});
+
+		it('should treat missing _callerIsPrivileged as non-privileged and mask post', async () => {
+			// If Stage 1 didn't set _callerIsPrivileged, default to masking
+			const hookData = {
+				posts: [{
+					pid: 1,
+					uid: 0,
+					isAnonymousPost: true,
+					// _callerIsPrivileged deliberately absent
+					user: { uid: 0, username: '[[global:guest]]' },
+				}],
+				uid: 0,
+			};
+			const result = await plugin.onTopicsAddPostData(hookData);
+
+			assert.strictEqual(result.posts[0].user.username, 'Anonymous');
+		});
+
+		it('ANONYMOUS_USER constant should have the correct fields', () => {
+			const anon = plugin.ANONYMOUS_USER;
+
+			assert.strictEqual(anon.uid, 0);
+			assert.strictEqual(anon.username, 'Anonymous');
+			assert.strictEqual(anon.displayname, 'Anonymous');
+			assert.strictEqual(anon.userslug, '');
+			assert.strictEqual(anon.picture, null);
+			assert.strictEqual(anon['icon:text'], '?');
+			assert.strictEqual(anon['icon:bgColor'], '#888888');
+			assert.strictEqual(anon.status, 'offline');
+		});
+
+		it('stage 2 masking should be a copy, not a reference to ANONYMOUS_USER', async () => {
+			const hookData = {
+				posts: [{
+					pid: 1,
+					uid: 0,
+					isAnonymousPost: true,
+					_callerIsPrivileged: false,
+					user: { uid: 0, username: '[[global:guest]]' },
+				}],
+				uid: 0,
+			};
+			const result = await plugin.onTopicsAddPostData(hookData);
+
+			// Mutating the returned user object should not affect the ANONYMOUS_USER constant
+			result.posts[0].user.username = 'mutated';
+			assert.strictEqual(plugin.ANONYMOUS_USER.username, 'Anonymous');
+		});
 	});
 });
 
