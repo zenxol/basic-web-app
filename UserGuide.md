@@ -47,3 +47,38 @@ Use this template when describing a new or modified feature so reviewers and tes
 		- **Edge Cases:** String/boolean type coercion for Redis storage ("true" as truthy), false/0 values not triggering masking, double-processing protection (`_originalUid`/`_originalUser`/`_originalHandle` preservation), missing caller context defaults to masking, handle field conditional setting, and `ANONYMOUS_USER` constant immutability.
 	- Together, the tests ensure that posts created with the anonymous flag are properly stored and retrieved with correct visibility behavior based on viewer privileges throughout the entire system lifecycle.
 
+## LaTeX Integration and Testing
+
+- **Feature:** LaTeX button in the composer toolbar and MathJax rendering for math equations in posts and topics.
+- **Summary:** Adds a LaTeX button to the NodeBB composer that wraps selected text in `$$` delimiters (or inserts `$$ $$` when nothing is selected) for display math, and injects MathJax from a CDN so that LaTeX/TeX equations render correctly in topic views and composer preview.
+- **How it works:**
+	- **Backend - Formatting Registration:** The plugin hooks into `filter:composer.formatting` in [library.js](vendor/nodebb-plugin-composer-latex/library.js). `registerFormatting` adds a `latex` option to the payload with `name: 'latex'`, `className: 'fa fa-superscript'`, and visibility for mobile/desktop/main/reply. It preserves any existing formatting options.
+	- **Backend - MathJax Script Injection:** The plugin hooks into `filter:middleware.renderHeader`. `addMathJaxScript` appends MathJax configuration and the MathJax CDN script (`https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js`) into `templateData.useCustomHTML`, so every page load includes MathJax. It appends to existing `useCustomHTML` when present.
+	- **Frontend - LaTeX Button:** In [public/js/client.js](vendor/nodebb-plugin-composer-latex/public/js/client.js), the plugin listens for `action:composer.enhanced` and registers a button dispatch via `formatting.addButtonDispatch('latex', ...)`. On click, it either wraps the selection in `$$...$$` or inserts `$$ $$` with the cursor between them. It then triggers the composer preview.
+	- **Frontend - MathJax Rendering:** [public/js/mathjax.js](vendor/nodebb-plugin-composer-latex/public/js/mathjax.js) configures MathJax for inline (`$...$`, `\(...\)`) and display (`$$...$$`, `\[...\]`) math. It loads MathJax from the CDN on demand, runs `typesetPromise` on page load and when the composer preview updates, and handles the case where the header script is already present.
+- **How to test:**
+	1. Run the LaTeX plugin unit tests:
+
+		 npm test -- test/plugins-composer-latex.js
+
+		 Or run the plugin's tests directly:
+
+		 cd vendor/nodebb-plugin-composer-latex
+		 npm test
+
+	2. Manual/quick checks:
+		 - Start NodeBB and open the composer (new topic or reply).
+		 - Confirm a LaTeX (superscript) button appears in the formatting toolbar.
+		 - Click the button with no selection: `$$ $$` should be inserted with cursor between.
+		 - Select text and click the button: text should be wrapped in `$$...$$`.
+		 - Submit a post containing `$E = mc^2$` or `$$\int_0^1 x^2 dx$$`.
+		 - View the topic: equations should render as math (not raw LaTeX).
+		 - Check the composer preview: equations should render live as you type.
+- **Tests:** Links to automated test files:
+	- [test/plugins-composer-latex.js](test/plugins-composer-latex.js) - Entry point that loads the plugin unit tests
+	- [vendor/nodebb-plugin-composer-latex/test/composer-latex.js](vendor/nodebb-plugin-composer-latex/test/composer-latex.js) - Unit tests for `registerFormatting` and `addMathJaxScript`
+- **Why tests are sufficient:**
+	- **registerFormatting tests:** Verify that the latex option is added with correct name, className, title, and visibility (mobile/desktop); that existing options are preserved; and that an empty or missing `options` array is handled correctly.
+	- **addMathJaxScript tests:** Verify that MathJax config and script are injected into `templateData.useCustomHTML` with the expected content (mathjax, script, cdn.jsdelivr.net); that injection appends to existing `useCustomHTML`; and that nothing is done when `templateData` is missing.
+	- These unit tests cover the backend hooks that power the LaTeX feature. The frontend button dispatch and MathJax client-side behavior are exercised via manual/end-to-end testing, which is appropriate because they depend on the NodeBB composer UI and DOM. Together, the tests ensure the plugin integrates correctly with NodeBB's formatting and header middleware, and that the math rendering pipeline is correctly configured.
+
